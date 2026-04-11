@@ -1,7 +1,6 @@
 **1. Título do Jogo**
 
-Nome do jogo: A Missão Demolay
-Subtítulo: Os 7 pilares da Ordem
+Nome do jogo: "As Sete Velas: A Missão DeMolay"
 
 **2. Descrição Geral**
 
