@@ -63,8 +63,7 @@ Restrições: Sair dos limites físicos do templo, não é permitido atravessar 
 
 **12. Estrutura do Projeto**
 
-Organização dos arquivos do jogo: main.py, player.py, inimigos.py, map.py
-Separação por responsabilidades: Classes distintas para o jogador, inimigo, comandos de voz, sonoplastia e mapa
+Organização dos arquivos do jogo: main.py, personagens.py, main_jogo.py Separação por responsabilidades: Classes distintas para o jogador, inimigo, comandos de voz, sonoplastia e mapa
 
 **13. Funcionalidades Mínimas**
 
