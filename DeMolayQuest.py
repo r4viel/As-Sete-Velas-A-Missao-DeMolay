@@ -1,4 +1,4 @@
-from Classes import Personagem
+from Classes import Peralde , Jacques
 import pygame
 import sys
 import os
@@ -23,7 +23,7 @@ if num_controles > 1:
     print(f"Controle 2 conectado: {controle2.get_name()}")
 
 if num_controles == 0:
-    print("Nenhum controle detectado. Iniciando jogo apenas no teclado/mouse.")
+    print("Nenhum controle detectado. Iniciando jogo apenas no teclado.")
 
 # constantes
 WIDTH = 1141
@@ -31,7 +31,7 @@ HEIGHT = 653
 
 # tela 
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-pygame.display.set_caption("Trial of the Seven Stars")
+pygame.display.set_caption("As sete velas a missão DeMolay")
 
 # tela interna 
 tela_jogo = pygame.Surface((WIDTH, HEIGHT))
@@ -106,8 +106,16 @@ while running:
             if controle1 and event.instance_id == controle1.get_instance_id():
                 if event.axis == 0:
                     print(f'C1 - Analógico Esq X: {event.value:.2f}')
+                    if event.value > 0:
+                        Peralde.mover("direita")
+                    else:
+                        Peralde.mover("esquerda")
                 elif event.axis == 1:
                     print(f'C1 - Analógico Esq Y: {event.value:.2f}')
+                    if event.value > 0:
+                        Peralde.mover("baixo")
+                    else:
+                        Peralde.mover("cima")
                 elif event.axis == 2:
                     print(f'C1 - Analógico Dir X: {event.value:.2f}')
                 elif event.axis == 3:
@@ -117,8 +125,16 @@ while running:
             elif controle2 and event.instance_id == controle2.get_instance_id():
                 if event.axis == 0:
                     print(f'C2 - Analógico Esq X: {event.value:.2f}')
+                    if event.value > 0:
+                        Jacques.mover("direita")
+                    else:
+                        Jacques.mover("esquerda")
                 elif event.axis == 1:
                     print(f'C2 - Analógico Esq Y: {event.value:.2f}')
+                    if event.value > 0:
+                        Jacques.mover("baixo")
+                    else:
+                        Jacques.mover("cima")
                 elif event.axis == 2:
                     print(f'C2 - Analógico Dir X: {event.value:.2f}')
                 elif event.axis == 3:
