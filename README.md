@@ -80,3 +80,44 @@ Funcionalidades extras que podem ser implementadas depois: implementação da so
 Ideias para evoluir o jogo: Implementação de habilidades especiais quando conquistar uma nova virtude, narração da história de Jacques Demolay e iluminação dinâmica
 
 Participantes: Mariana Sophia e João Felipe
+
+---
+
+**15. Controle pelo Celular**
+
+O jogo agora tem uma aba de menu **"CONECTAR CONTROLE"** que transforma o celular
+(ou qualquer aparelho com navegador) em um controle extra, sem tirar o
+funcionamento do teclado, mouse ou joystick — todos continuam ativos ao
+mesmo tempo, o celular é só mais uma fonte de entrada.
+
+Como usar
+
+1. Instale as dependências (uma única vez):
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Rode o jogo normalmente: `python DeMolayQuest.py`
+3. No menu, entre em **CONECTAR CONTROLE**. Um QR code vai aparecer na tela.
+4. Escaneie o QR code com o celular:
+   - Se o celular estiver na **mesma rede Wi-Fi** do computador, o link já
+     funciona direto (IP local).
+   - Se estiver em uma **rede diferente** (4G, outra Wi-Fi), configure um
+     token do [ngrok](https://ngrok.com) (grátis) para o jogo abrir um
+     túnel público automaticamente:
+     ```bash
+     ngrok config add-authtoken SEU_TOKEN_AQUI
+     ```
+     Sem o token, o jogo cai automaticamente para o IP local (funciona só
+     na mesma rede).
+5. A tela do celular mostra um D-pad (esquerda/direita), botão de agachar,
+   e botões de pular e atacar. É só jogar.
+
+### Importante
+
+- **Nada é obrigatório aqui**: se ninguém conectar o celular, ou se as
+  bibliotecas (`flask`, `qrcode`, `pyngrok`) não estiverem instaladas, o
+  jogo funciona exatamente como antes, sem nenhum erro.
+- O celular soma-se ao teclado/mouse/joystick: dá pra ter um jogador no
+  teclado e reforçar os comandos pelo celular ao mesmo tempo, por exemplo.
+- O servidor sobe localmente na porta `5000` (arquivo `servidor_mobile.py`);
+  o link público via ngrok muda a cada nova sessão no plano gratuito.
