@@ -1,0 +1,4 @@
+pygame>=2.5
+flask>=3.0
+qrcode[pil]>=7.4
+pyngrok>=7.0
