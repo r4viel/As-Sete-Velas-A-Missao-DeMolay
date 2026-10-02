@@ -4,6 +4,13 @@ import pygame
 import sys
 import os
 import math
+import threading
+
+try:
+    import servidor_mobile
+except Exception as e:
+    servidor_mobile = None
+    print(f"[controle mobile] módulo indisponível: {e}")
 
 
 pygame.init()
@@ -45,7 +52,7 @@ running = True
 game_state = "menu"
 
 
-OPCOES_MENU = ["JOGAR", "CRÉDITOS", "SAIR"]
+OPCOES_MENU = ["JOGAR", "CONECTAR CONTROLE", "CRÉDITOS", "SAIR"]
 opcao_selecionada = 0
 
 
@@ -114,6 +121,16 @@ def texto_centralizado(surface, texto, fonte, cor, y):
     return rect
 
 
+def calcular_rects_menu():
+    """Retângulos dos botões do menu principal (mesma ordem de OPCOES_MENU)."""
+    rects = []
+    for i in range(len(OPCOES_MENU)):
+        rect = pygame.Rect(0, 0, 390, 54)
+        rect.center = (WIDTH // 2, 270 + i * 68)
+        rects.append(rect)
+    return rects
+
+
 def desenha_menu(surface, mouse_pos, tick):
     surface.blit(fundo_menu, (0, 0))
 
@@ -128,11 +145,9 @@ def desenha_menu(surface, mouse_pos, tick):
     desenha_divisor(surface, 230)
 
 
-    rects_botoes = []
+    rects_botoes = calcular_rects_menu()
     for i, opcao in enumerate(OPCOES_MENU):
-        by = 290 + i * 80
-        rect = pygame.Rect(0, 0, 280, 54)
-        rect.center = (WIDTH // 2, by)
+        rect = rects_botoes[i]
 
         bg = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
         bg.fill(COR_BOTAO_BG)
@@ -144,11 +159,84 @@ def desenha_menu(surface, mouse_pos, tick):
         label = fonte_botao.render(opcao, True, cor_borda)
         surface.blit(label, label.get_rect(center=rect.center))
 
-        rects_botoes.append(rect)
-
     desenha_divisor(surface, 545, largura=300)
 
     return rects_botoes
+conexao_mobile = {"url": None, "qr": None, "carregando": False, "erro": ""}
+
+
+def abrir_tela_conectar():
+    conexao_mobile["erro"] = ""
+    if servidor_mobile is None:
+        conexao_mobile["erro"] = "O arquivo servidor_mobile.py não foi encontrado."
+        return
+    ok, mensagem = servidor_mobile.dependencias_ok()
+    if not ok:
+        conexao_mobile["erro"] = mensagem
+        return
+    if conexao_mobile["url"] or conexao_mobile["carregando"]:
+        return
+
+    conexao_mobile["carregando"] = True
+
+    def trabalho():
+        try:
+            conexao_mobile["url"] = servidor_mobile.iniciar_servidor()
+        except Exception as e:
+            conexao_mobile["erro"] = f"Não foi possível iniciar o servidor: {e}"
+        finally:
+            conexao_mobile["carregando"] = False
+
+    threading.Thread(target=trabalho, daemon=True).start()
+
+
+def desenha_conectar(surface, tick):
+    surface.blit(fundo_menu, (0, 0))
+
+    texto_centralizado(surface, "Conectar Controle", fonte_titulo, COR_TITULO_GLOW, 85)
+    desenha_divisor(surface, 135, largura=500)
+
+    url = conexao_mobile["url"]
+    if url and conexao_mobile["qr"] is None and servidor_mobile is not None:
+        conexao_mobile["qr"] = servidor_mobile.gerar_superficie_qrcode(url, 220)
+
+    if conexao_mobile["erro"]:
+        texto_centralizado(surface, conexao_mobile["erro"], fonte_cred_sm, (255, 120, 100), 300)
+    elif conexao_mobile["carregando"] or not url:
+        pontos = "." * (1 + (tick // 20) % 3)
+        texto_centralizado(surface, "Preparando o servidor" + pontos, fonte_cred, COR_TEXTO_CRED, 300)
+    else:
+        texto_centralizado(surface, "Escaneie o QR code com a câmera do celular",
+                           fonte_cred_sm, (220, 210, 190), 162)
+
+        qr = conexao_mobile["qr"]
+        if qr is not None:
+            moldura = pygame.Rect(0, 0, qr.get_width() + 24, qr.get_height() + 24)
+            moldura.center = (WIDTH // 2, 300)
+            pygame.draw.rect(surface, (255, 255, 255), moldura, border_radius=6)
+            surface.blit(qr, qr.get_rect(center=moldura.center))
+            y_url = moldura.bottom + 24
+        else:
+            texto_centralizado(surface, "(instale 'qrcode[pil]' para ver o QR code)",
+                               fonte_hud_sm, (200, 160, 120), 300)
+            y_url = 340
+        texto_centralizado(surface, url, fonte_cred_sm, COR_TITULO, y_url)
+
+        if servidor_mobile.celular_esta_conectado():
+            texto_centralizado(surface, "Celular conectado!", fonte_cred, (120, 220, 140), y_url + 36)
+        else:
+            texto_centralizado(surface, "Aguardando o celular...", fonte_cred_sm, COR_TEXTO_CRED, y_url + 36)
+
+        dica = ("Celular e computador precisam estar na mesma rede Wi-Fi."
+                if "ngrok" not in url else "Link público via ngrok: funciona em qualquer rede.")
+        texto_centralizado(surface, dica, fonte_hud_sm, (150, 140, 110), y_url + 66)
+
+    desenha_divisor(surface, HEIGHT - 80, largura=400)
+    rect_voltar = pygame.Rect(0, 0, 120, 30)
+    rect_voltar.center = (WIDTH // 2, HEIGHT - 50)
+    label_v = fonte_botao.render("VOLTAR", True, COR_BOTAO)
+    surface.blit(label_v, label_v.get_rect(center=rect_voltar.center))
+    return rect_voltar
 
 
 def desenha_creditos(surface, tick):
@@ -278,6 +366,24 @@ def reiniciar_combate():
     gerenciador_fases = GerenciadorFases(WIDTH, HEIGHT)
     pontuacao = 0
 
+    if servidor_mobile is not None:
+        servidor_mobile.consumir_eventos()
+
+
+def ativar_opcao_menu(indice):
+    global game_state, running
+    opcao = OPCOES_MENU[indice]
+    if opcao == "JOGAR":
+        reiniciar_combate()
+        game_state = "jogando"
+    elif opcao == "CONECTAR CONTROLE":
+        abrir_tela_conectar()
+        game_state = "conectar"
+    elif opcao == "CRÉDITOS":
+        game_state = "creditos"
+    elif opcao == "SAIR":
+        running = False
+
 
 QUADRO_DE_IMPACTO = 0.55
 
@@ -331,6 +437,10 @@ def atualizar_combate(dt, teclas, eventos):
         return
 
     if gerenciador_fases.estado in (gerenciador_fases.ESTADO_VITORIA, gerenciador_fases.ESTADO_DERROTA):
+        if jacques:
+            jacques.atualizar(dt)
+        for inimigo in gerenciador_fases.inimigos:
+            inimigo.atualizar(dt)
         return
 
 
@@ -341,6 +451,16 @@ def atualizar_combate(dt, teclas, eventos):
         dx += 1
 
     agachar_pressionado = bool(teclas[pygame.K_DOWN] or teclas[pygame.K_s])
+
+    # Celular: soma-se ao teclado/mouse/joystick
+    if servidor_mobile is not None:
+        movimento_mobile = servidor_mobile.obter_estado_movimento()
+        if movimento_mobile["esquerda"]:
+            dx -= 1
+        if movimento_mobile["direita"]:
+            dx += 1
+        if movimento_mobile["agachar"]:
+            agachar_pressionado = True
 
     if controle1:
         try:
@@ -379,6 +499,14 @@ def atualizar_combate(dt, teclas, eventos):
             elif event.button == 1:
                 jacques.pular()
 
+    if servidor_mobile is not None:
+        for acao in servidor_mobile.consumir_eventos():
+            if jacques is None or not jacques.esta_vivo():
+                continue
+            if acao == "atacar":
+                jacques.atacar()
+            elif acao == "pular":
+                jacques.pular()
 
     if jacques:
         jacques.atualizar(dt)
@@ -469,15 +597,9 @@ while running:
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
                     opcao_selecionada = (opcao_selecionada + 1) % len(OPCOES_MENU)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    if opcao_selecionada == 0:
-                        reiniciar_combate()
-                        game_state = "jogando"
-                    elif opcao_selecionada == 1:
-                        game_state = "creditos"
-                    elif opcao_selecionada == 2:
-                        running = False
+                    ativar_opcao_menu(opcao_selecionada)
 
-            elif game_state == "creditos":
+            elif game_state in ("creditos", "conectar"):
                 if event.key == pygame.K_ESCAPE:
                     game_state = "menu"
 
@@ -492,17 +614,19 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if game_state == "menu":
-                rects = desenha_menu(tela_jogo, mouse_interno, tick)
-                if rects[0].collidepoint(mouse_interno):
-                    reiniciar_combate()
-                    game_state = "jogando"
-                elif rects[1].collidepoint(mouse_interno):
-                    game_state = "creditos"
-                elif rects[2].collidepoint(mouse_interno):
-                    running = False
+                for i, rect in enumerate(calcular_rects_menu()):
+                    if rect.collidepoint(mouse_interno):
+                        opcao_selecionada = i
+                        ativar_opcao_menu(i)
+                        break
 
             elif game_state == "creditos":
                 rect_v = desenha_creditos(tela_jogo, tick)
+                if rect_v.collidepoint(mouse_interno):
+                    game_state = "menu"
+
+            elif game_state == "conectar":
+                rect_v = desenha_conectar(tela_jogo, tick)
                 if rect_v.collidepoint(mouse_interno):
                     game_state = "menu"
 
@@ -511,14 +635,8 @@ while running:
             if controle1 and event.instance_id == controle1.get_instance_id():
                 if game_state == "menu":
                     if event.button == 0:
-                        if opcao_selecionada == 0:
-                            reiniciar_combate()
-                            game_state = "jogando"
-                        elif opcao_selecionada == 1:
-                            game_state = "creditos"
-                        elif opcao_selecionada == 2:
-                            running = False
-                elif game_state == "creditos":
+                        ativar_opcao_menu(opcao_selecionada)
+                elif game_state in ("creditos", "conectar"):
                     if event.button == 1:
                         game_state = "menu"
                 elif game_state == "jogando":
@@ -529,14 +647,8 @@ while running:
             elif controle2 and event.instance_id == controle2.get_instance_id():
                 if game_state == "menu":
                     if event.button == 0:
-                        if opcao_selecionada == 0:
-                            reiniciar_combate()
-                            game_state = "jogando"
-                        elif opcao_selecionada == 1:
-                            game_state = "creditos"
-                        elif opcao_selecionada == 2:
-                            running = False
-                elif game_state == "creditos":
+                        ativar_opcao_menu(opcao_selecionada)
+                elif game_state in ("creditos", "conectar"):
                     if event.button == 1:
                         game_state = "menu"
                 elif game_state == "jogando":
@@ -562,6 +674,9 @@ while running:
 
     elif game_state == "creditos":
         desenha_creditos(tela_jogo, tick)
+
+    elif game_state == "conectar":
+        desenha_conectar(tela_jogo, tick)
 
     elif game_state == "jogando":
         teclas = pygame.key.get_pressed()
