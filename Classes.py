@@ -1,5 +1,3 @@
-
-
 import os
 import math
 import random
@@ -14,47 +12,159 @@ IMPULSO_PULO = 620.0
 FATOR_ALTURA_AGACHADO = 0.55
 
 DIR_BASE = os.path.dirname(os.path.abspath(__file__))
-DIR_ASSETS = os.path.join(DIR_BASE, "asserts")
+
+DIR_IMG = os.path.join(DIR_BASE, "IMG")
+
+CONFIG_SPRITES = {
+    "cavaleiro": {
+        "arquivos": {
+            "andar": "walk.png",
+            "correr": "run.png",
+            "pular": "jump.png",
+            "machucado": "hurt.png",
+            "morrer": "dead.png",
+            "defender": "protect.png",
+            "ataque1": "attack.1.png",
+            "ataque2": "attack.2.png",
+            "ataque3": "attack.3.png",
+            "ataque4": "attack.4.png",
+        },
+    },
+    "jacques": {
+        "arquivos": {
+            "andar": "walk.png",
+            "correr": "run.png",
+            "pular": "jump.png",
+            "morrer": "dead.png",
+            "defender": "protect.png",
+            "ataque1": "attack01.png",
+            "ataque2": "attack02.png",
+            "ataque3": "attack03.png",
+        },
+        "recortes": {
+            "andar":    [(11, 186), (209, 395), (410, 595), (612, 796),
+                         (805, 977), (994, 1171), (1194, 1375), (1389, 1563)],
+            "correr":   [(16, 199), (218, 401), (418, 595), (616, 791),
+                         (812, 998), (1018, 1186), (1208, 1385), (1404, 1581)],
+            "pular":    [(273, 422), (484, 612), (661, 833), (864, 1015),
+                         (1048, 1193), (1206, 1359), (1385, 1551)],
+            "morrer":   [(30, 194), (242, 416), (445, 622), (629, 823),
+                         (832, 1008), (1027, 1269), (1302, 1582)],
+            "defender": [(42, 314)],
+            "ataque1":  [(10, 257), (315, 583), (599, 917), (943, 1263), (1264, 1591)],
+            "ataque2":  [(14, 276), (327, 619), (677, 1175), (1236, 1585)],
+            "ataque3":  [(7, 197), (239, 435), (454, 657), (672, 909),
+                         (910, 1179), (1180, 1409), (1410, 1599)],
+        },
+        "escalas": {
+            "andar": 1.0, "correr": 1.05, "pular": 1.1, "morrer": 0.95,
+            "defender": 0.7, "ataque1": 0.65, "ataque2": 0.65, "ataque3": 1.0,
+        },
+        "substitutos": {
+            "machucado": ("defender", 4),
+            "ataque4": ("ataque3", 1),
+        },
+    },
+}
 
 
-def carregar_spritesheet(caminho, largura_frame=LARGURA_FRAME, altura_frame=ALTURA_FRAME):
+class Quadro:
+    __slots__ = ("imagem", "ancora_x", "escala")
+
+    def __init__(self, imagem, ancora_x, escala=1.0):
+        self.imagem = imagem
+        self.ancora_x = ancora_x
+        self.escala = escala
+
+
+def _quadro_vazio():
+    imagem = pygame.Surface((64, 64), pygame.SRCALPHA)
+    imagem.fill((255, 0, 255, 120))
+    return Quadro(imagem, 32, 1.0)
+
+
+def _recortar_quadro(folha, x_ini, x_fim, escala):
+    area = pygame.Rect(x_ini, 0, x_fim - x_ini + 1, folha.get_height()).clip(folha.get_rect())
+    if area.width <= 0:
+        return None
+    recorte = folha.subsurface(area)
+    caixa = recorte.get_bounding_rect(min_alpha=20)
+    if caixa.width <= 0 or caixa.height <= 0:
+        return None
+    imagem = recorte.subsurface(caixa).copy()
+
+    altura_faixa = max(1, int(imagem.get_height() * 0.12))
+    faixa = imagem.subsurface((0, imagem.get_height() - altura_faixa,
+                               imagem.get_width(), altura_faixa))
+    mascara = pygame.mask.from_surface(faixa, 20)
+    if mascara.count() > 0:
+        ancora_x = mascara.centroid()[0]
+    else:
+        ancora_x = imagem.get_width() / 2
+    return Quadro(imagem, ancora_x, escala)
+
+
+def carregar_spritesheet(caminho, recortes=None, escala=1.0):
     try:
         folha = pygame.image.load(caminho).convert_alpha()
     except Exception as e:
         print(f"Erro ao carregar spritesheet {caminho}: {e}")
-        vazio = pygame.Surface((largura_frame, altura_frame), pygame.SRCALPHA)
-        vazio.fill((255, 0, 255, 120))
-        return [vazio]
+        return [_quadro_vazio()]
 
-    largura_total = folha.get_width()
-    n_frames = max(1, largura_total // largura_frame)
-    frames = []
-    for i in range(n_frames):
-        frame = folha.subsurface((i * largura_frame, 0, largura_frame, altura_frame)).copy()
-        frames.append(frame)
-    return frames
+    if recortes is None:
+        n_frames = max(1, folha.get_width() // LARGURA_FRAME)
+        recortes = [(i * LARGURA_FRAME, (i + 1) * LARGURA_FRAME - 1) for i in range(n_frames)]
+
+    quadros = []
+    for x_ini, x_fim in recortes:
+        quadro = _recortar_quadro(folha, x_ini, x_fim, escala)
+        if quadro is not None:
+            quadros.append(quadro)
+    return quadros or [_quadro_vazio()]
 
 
 class BibliotecaSprites:
-    _cache = None
+    """Guarda (uma vez só) as animações de cada personagem, por nome de pasta."""
+    _cache = {}
+    _alturas = {}
 
     @classmethod
-    def obter(cls):
-        if cls._cache is None:
-            cls._cache = {
-                "parado":     carregar_spritesheet(os.path.join(DIR_ASSETS, "walk.png"))[:1],
-                "andar":      carregar_spritesheet(os.path.join(DIR_ASSETS, "walk.png")),
-                "correr":     carregar_spritesheet(os.path.join(DIR_ASSETS, "run.png")),
-                "pular":      carregar_spritesheet(os.path.join(DIR_ASSETS, "jump.png")),
-                "machucado":  carregar_spritesheet(os.path.join(DIR_ASSETS, "hurt.png")),
-                "morrer":     carregar_spritesheet(os.path.join(DIR_ASSETS, "dead.png")),
-                "defender":   carregar_spritesheet(os.path.join(DIR_ASSETS, "protect.png")),
-                "ataque1":    carregar_spritesheet(os.path.join(DIR_ASSETS, "attack.1.png")),
-                "ataque2":    carregar_spritesheet(os.path.join(DIR_ASSETS, "attack.2.png")),
-                "ataque3":    carregar_spritesheet(os.path.join(DIR_ASSETS, "attack.3.png")),
-                "ataque4":    carregar_spritesheet(os.path.join(DIR_ASSETS, "attack.4.png")),
-            }
-        return cls._cache
+    def obter(cls, pasta="cavaleiro"):
+        if pasta not in CONFIG_SPRITES:
+            print(f"Pasta de sprites desconhecida: '{pasta}'. Usando 'cavaleiro'.")
+            pasta = "cavaleiro"
+        if pasta not in cls._cache:
+            cls._cache[pasta] = cls._carregar(pasta)
+        return cls._cache[pasta]
+
+    @classmethod
+    def altura_referencia(cls, pasta="cavaleiro"):
+        """Altura (em pixels da imagem original) do personagem em pé."""
+        if pasta not in CONFIG_SPRITES:
+            pasta = "cavaleiro"
+        cls.obter(pasta)
+        return cls._alturas[pasta]
+
+    @classmethod
+    def _carregar(cls, pasta):
+        config = CONFIG_SPRITES[pasta]
+        diretorio = os.path.join(DIR_IMG, pasta)
+        recortes = config.get("recortes", {})
+        escalas = config.get("escalas", {})
+
+        sprites = {}
+        for nome, arquivo in config["arquivos"].items():
+            sprites[nome] = carregar_spritesheet(os.path.join(diretorio, arquivo),
+                                                 recortes.get(nome), escalas.get(nome, 1.0))
+
+        for nome, (origem, repeticoes) in config.get("substitutos", {}).items():
+            if nome not in sprites:
+                sprites[nome] = list(sprites[origem]) * repeticoes
+
+        sprites["parado"] = sprites["andar"][:1]
+
+        cls._alturas[pasta] = max(q.imagem.get_height() * q.escala for q in sprites["andar"])
+        return sprites
 
 
 VELOCIDADE_ANIM = 0.09
@@ -64,6 +174,7 @@ QUADRO_DE_IMPACTO = 0.55
 
 
 class Personagem:
+    PASTA_SPRITES = "cavaleiro"
 
     def __init__(self, nome, vida, forca, poder, x, y, largura=190, altura=190, velocidade=220):
         self.nome = nome
@@ -83,7 +194,9 @@ class Personagem:
 
         self.estado = "parado"
         self.frame_index = 0.0
-        self.sprites = BibliotecaSprites.obter()
+        self.sprites = BibliotecaSprites.obter(self.PASTA_SPRITES)
+        self._altura_ref = BibliotecaSprites.altura_referencia(self.PASTA_SPRITES)
+        self._cache_imagens = {}
 
 
         self.esta_vivo_flag = True
@@ -126,7 +239,7 @@ class Personagem:
 
 
     def mover_horizontal(self, dx, dt, limites=None):
-        if self.estado in ("atacando", "morrendo", "machucado", "pulando", "agachado") or not self.esta_vivo_flag:
+        if self.estado in ("atacando", "morrendo", "machucado", "agachado") or not self.esta_vivo_flag:
             return
         if dx == 0:
             return
@@ -139,7 +252,8 @@ class Personagem:
         elif dx < -0.05:
             self.direcao = "esquerda"
 
-        self.estado = "andando"
+        if self.estado != "pulando":
+            self.estado = "andando"
 
         if limites:
             self.x = max(limites.left, min(self.x, limites.right - self.largura))
@@ -151,7 +265,8 @@ class Personagem:
             self.mover_horizontal(1, dt, limites)
 
     def pular(self):
-        if self.estado in ("atacando", "morrendo", "machucado", "pulando", "agachado") or not self.esta_vivo_flag:
+        if (self.estado in ("atacando", "morrendo", "machucado", "pulando", "agachado")
+                or self.pulando or not self.esta_vivo_flag):
             return False
         self.estado = "pulando"
         self.pulando = True
@@ -173,7 +288,7 @@ class Personagem:
 
     def pode_atacar(self):
         return (self.esta_vivo_flag and self.estado not in ("atacando", "morrendo", "machucado", "pulando")
-                and self.cooldown_ataque <= 0)
+                and not self.pulando and self.cooldown_ataque <= 0)
 
     def iniciar_ataque(self, tipo_ataque="ataque1"):
         if not self.pode_atacar():
@@ -245,16 +360,16 @@ class Personagem:
             self.cooldown_ataque = max(0, self.cooldown_ataque - dt)
         if self.tempo_invencivel > 0:
             self.tempo_invencivel = max(0, self.tempo_invencivel - dt)
-
-
-        if self.estado == "pulando":
+        if self.pulando or self.y < self.chao_y - 0.01:
+            self.pulando = True
             self.velocidade_vertical += GRAVIDADE * dt
             self.y += self.velocidade_vertical * dt
             if self.y >= self.chao_y:
                 self.y = self.chao_y
                 self.velocidade_vertical = 0.0
                 self.pulando = False
-                self.estado = "parado"
+                if self.estado == "pulando":
+                    self.estado = "parado"
 
         frames = self._lista_frames_atual()
         self.frame_index += dt / VELOCIDADE_ANIM
@@ -289,21 +404,40 @@ class Personagem:
         return min(1.0, self.frame_index / len(frames))
 
 
+    def _imagem_do_quadro(self, quadro, fator, espelhar):
+        """Imagem do quadro já no tamanho final (com cache)."""
+        chave = (id(quadro), round(fator, 3), espelhar)
+        imagem = self._cache_imagens.get(chave)
+        if imagem is None:
+            tamanho = (max(1, round(quadro.imagem.get_width() * fator)),
+                       max(1, round(quadro.imagem.get_height() * fator)))
+            if fator < 1:
+                imagem = pygame.transform.smoothscale(quadro.imagem, tamanho)
+            else:
+                imagem = pygame.transform.scale(quadro.imagem, tamanho)
+            if espelhar:
+                imagem = pygame.transform.flip(imagem, True, False)
+            self._cache_imagens[chave] = imagem
+        return imagem
+
     def desenhar(self, surface, mostrar_barra_vida=True):
         frames = self._lista_frames_atual()
-        idx = int(self.frame_index) % len(frames)
-        imagem = frames[idx]
-        imagem = pygame.transform.scale(imagem, (self.largura, self.altura))
+        quadro = frames[int(self.frame_index) % len(frames)]
+        fator = (self.altura / self._altura_ref) * quadro.escala
+        espelhar = self.direcao == "esquerda"
+        imagem = self._imagem_do_quadro(quadro, fator, espelhar)
 
-        if self.direcao == "esquerda":
-            imagem = pygame.transform.flip(imagem, True, False)
-
+        ancora_x = quadro.ancora_x * imagem.get_width() / quadro.imagem.get_width()
+        if espelhar:
+            ancora_x = imagem.get_width() - ancora_x
+        pos_x = int(self.x + self.largura / 2 - ancora_x)
+        pos_y = int(self.y + self.altura - imagem.get_height())
 
         if self.tempo_invencivel > 0 and int(self.tempo_invencivel * 20) % 2 == 0:
             imagem = imagem.copy()
             imagem.set_alpha(120)
 
-        surface.blit(imagem, (int(self.x), int(self.y)))
+        surface.blit(imagem, (pos_x, pos_y))
 
         if mostrar_barra_vida and self.vida_maxima > 0:
             self._desenhar_barra_vida(surface)
@@ -321,6 +455,7 @@ class Personagem:
 
 
 class Jogador(Personagem):
+    PASTA_SPRITES = "jacques"
 
     def __init__(self, nome, vida, forca, poder, x, y, **kwargs):
         super().__init__(nome, vida, forca, poder, x, y, **kwargs)
@@ -331,7 +466,7 @@ class Jogador(Personagem):
 
 
 class Aliado(Personagem):
-
+    PASTA_SPRITES = "jacques"
 
     PADROES_POR_FASE = {
         1: {"tipo_ataque": "ataque1", "alcance": 260, "cooldown": 0.75},
@@ -399,6 +534,7 @@ class Aliado(Personagem):
 
 
 class Inimigo(Personagem):
+    PASTA_SPRITES = "cavaleiro"
 
     def __init__(self, nome, vida, forca, poder, x, y, pontos=10,
                  pontos_virtude_necessarios=100, tipos_ataque=None, **kwargs):
