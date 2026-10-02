@@ -1,5 +1,3 @@
-
-
 import os
 import pygame
 from Classes import Soldado, Lorde, ReiFilipeIV
