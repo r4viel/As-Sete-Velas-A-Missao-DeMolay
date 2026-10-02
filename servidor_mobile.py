@@ -1,6 +1,7 @@
 import io
 import socket
 import threading
+import time
 
 try:
     from flask import Flask, request, Response
@@ -33,7 +34,7 @@ _estado_movimento = {
     "agachar": False,
 }
 
-_eventos_pendentes = []  # ações "de um clique só": pular, atacar
+_eventos_pendentes = []
 
 _flask_app = None
 _thread_flask = None
@@ -41,7 +42,9 @@ _flask_iniciado = False
 _url_atual = None
 _celular_conectado = False
 _ultimo_ping = 0.0
+_porta_atual = 5000
 
+TEMPO_LIMITE_PING = 6.0
 
 PAGINA_HTML = """<!doctype html>
 <html lang="pt-br">
@@ -193,6 +196,27 @@ marcarStatus(true);
 """
 
 
+def _marcar_atividade():
+    """Registra que o celular acabou de dar sinal (chamar com _lock já adquirido)."""
+    global _celular_conectado, _ultimo_ping
+    _celular_conectado = True
+    _ultimo_ping = time.monotonic()
+
+
+def _porta_livre(porta, tentativas=10):
+    """Primeira porta livre a partir de `porta` (a 5000 costuma estar ocupada no macOS)."""
+    for candidata in range(porta, porta + tentativas):
+        teste = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            teste.bind(("0.0.0.0", candidata))
+            return candidata
+        except OSError:
+            continue
+        finally:
+            teste.close()
+    return porta
+
+
 def _criar_app():
     app = Flask(__name__)
 
@@ -202,28 +226,28 @@ def _criar_app():
 
     @app.route("/mover", methods=["POST"])
     def _mover():
-        global _celular_conectado
         dados = request.get_json(force=True, silent=True) or {}
         with _lock:
             for chave in ("esquerda", "direita", "agachar"):
                 if chave in dados:
                     _estado_movimento[chave] = bool(dados[chave])
-            _celular_conectado = True
+            _marcar_atividade()
         return ("", 204)
 
     @app.route("/acao", methods=["POST"])
     def _acao():
-        global _celular_conectado
         dados = request.get_json(force=True, silent=True) or {}
         nome = dados.get("nome")
         if nome in ("pular", "atacar"):
             with _lock:
                 _eventos_pendentes.append(nome)
-                _celular_conectado = True
+                _marcar_atividade()
         return ("", 204)
 
     @app.route("/status")
     def _status():
+        with _lock:
+            _marcar_atividade()
         return {"ok": True}
 
     return app
@@ -259,18 +283,22 @@ def iniciar_servidor(porta=5000, usar_ngrok=True):
     URL para acessar o controle: pública via ngrok se disponível/pedida,
     senão o IP local da máquina na rede.
     """
-    global _thread_flask, _flask_iniciado, _url_atual
+    global _thread_flask, _flask_iniciado, _url_atual, _porta_atual
 
     if not FLASK_DISPONIVEL:
         return None
 
     if not _flask_iniciado:
+        porta = _porta_livre(porta)
+        _porta_atual = porta
         _thread_flask = threading.Thread(target=_rodar_flask, args=(porta,), daemon=True)
         _thread_flask.start()
         _flask_iniciado = True
 
     if _url_atual:
         return _url_atual
+
+    porta = _porta_atual
 
     if usar_ngrok and NGROK_DISPONIVEL:
         try:
@@ -301,7 +329,7 @@ def gerar_superficie_qrcode(url, tamanho=240):
     if not QRCODE_DISPONIVEL or pygame is None:
         return None
     try:
-        img = qrcode.make(url).convert("RGB").resize((tamanho, tamanho))
+        img = qrcode.make(url).convert("RGB").resize((tamanho, tamanho), 0)  # 0 = NEAREST: QR nítido
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
         buffer.seek(0)
@@ -312,8 +340,10 @@ def gerar_superficie_qrcode(url, tamanho=240):
 
 
 def obter_estado_movimento():
-    """Estado contínuo (mantido pressionado) do controle do celular."""
     with _lock:
+        if _celular_conectado and time.monotonic() - _ultimo_ping > TEMPO_LIMITE_PING:
+            for chave in _estado_movimento:
+                _estado_movimento[chave] = False
         return dict(_estado_movimento)
 
 
@@ -327,4 +357,4 @@ def consumir_eventos():
 
 def celular_esta_conectado():
     with _lock:
-        return _celular_conectado
+        return _celular_conectado and time.monotonic() - _ultimo_ping <= TEMPO_LIMITE_PING
