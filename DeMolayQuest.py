@@ -1,5 +1,6 @@
 from Classes import Jacques
 from Sistemas import SistemaVirtude, GerenciadorFases
+from Transicoes import TransicaoNarrativa, TEXTOS_TRANSICAO
 import pygame
 import sys
 import os
@@ -354,10 +355,12 @@ jacques = None
 virtude = None
 gerenciador_fases = None
 pontuacao = 0
+transicao = None  # TransicaoNarrativa ativa (None = jogo liberado)
 
 
 def reiniciar_combate():
-    global jacques, virtude, gerenciador_fases, pontuacao
+    global jacques, virtude, gerenciador_fases, pontuacao, transicao
+    transicao = None
 
     jacques = Jacques(x=LIMITES_CENA.left + 60, y=LIMITES_CENA.centery)
     jacques.direcao = "direita"
@@ -376,6 +379,7 @@ def ativar_opcao_menu(indice):
     if opcao == "JOGAR":
         reiniciar_combate()
         game_state = "jogando"
+        iniciar_transicao(0)  # TRANSIÇÃO 1: antes da Fase 1
     elif opcao == "CONECTAR CONTROLE":
         abrir_tela_conectar()
         game_state = "conectar"
@@ -430,6 +434,49 @@ def _aplicar_ataques_inimigo(atacantes, alvos):
 
         if acertou_alguem:
             atacante.golpe_ja_aplicado = True
+
+
+def iniciar_transicao(indice, ao_ficar_preto=None):
+    """Cria a transição narrativa `indice` (0 a 3 em TEXTOS_TRANSICAO).
+
+    Guarda uma cópia do último quadro desenhado para escurecer a tela sem corte seco.
+    """
+    global transicao
+    transicao = TransicaoNarrativa(
+        TEXTOS_TRANSICAO[indice],
+        (WIDTH, HEIGHT),
+        fundo_anterior=tela_jogo.copy(),
+        desenhar_cena_nova=desenhar_combate,
+        ao_ficar_preto=ao_ficar_preto,
+    )
+
+
+def iniciar_transicao_de_fase_se_necessario():
+    """TRANSIÇÕES 2, 3 e 4: dispara quando o gerenciador acabou de concluir uma fase.
+
+    Fase 1 concluída -> texto 2, fase 2 -> texto 3, fase 3 (vitória) -> texto 4.
+    O gerenciador permanece em ESTADO_TRANSICAO até a transição chamar
+    avancar_apos_transicao, então não há como disparar duas vezes nem iniciar
+    a fase seguinte antes da hora.
+    """
+    if transicao is not None or gerenciador_fases is None:
+        return
+    if gerenciador_fases.estado == gerenciador_fases.ESTADO_TRANSICAO:
+        iniciar_transicao(gerenciador_fases.numero_fase,
+                          ao_ficar_preto=gerenciador_fases.avancar_apos_transicao)
+
+
+def atualizar_transicao(dt, eventos):
+    """Enquanto há transição, o gameplay não roda: só ela recebe os eventos."""
+    global transicao
+    transicao.tratar_eventos(eventos)
+    if servidor_mobile is not None:
+        # O botão de ataque do celular avança a cena; os demais toques são descartados.
+        if "atacar" in servidor_mobile.consumir_eventos():
+            transicao.avancar()
+    transicao.atualizar(dt)
+    if not transicao.ativa:
+        transicao = None
 
 
 def atualizar_combate(dt, teclas, eventos):
@@ -547,9 +594,7 @@ def desenhar_combate(surface):
 
     desenha_hud(surface, jacques, virtude, gerenciador_fases, pontuacao)
 
-    if gerenciador_fases.estado == gerenciador_fases.ESTADO_TRANSICAO:
-        texto_centralizado(surface, gerenciador_fases.mensagem, fonte_aviso, COR_TITULO_GLOW, HEIGHT // 2)
-    elif gerenciador_fases.estado == gerenciador_fases.ESTADO_VITORIA:
+    if gerenciador_fases.estado == gerenciador_fases.ESTADO_VITORIA:
         desenha_tela_final(surface, "Vitória!", COR_VELA,
                             "As sete velas foram acesas. As virtudes de Jacques DeMolay prevaleceram.")
     elif gerenciador_fases.estado == gerenciador_fases.ESTADO_DERROTA:
@@ -606,7 +651,7 @@ while running:
             elif game_state == "jogando":
                 if event.key == pygame.K_ESCAPE:
                     game_state = "menu"
-                elif event.key == pygame.K_RETURN and gerenciador_fases is not None and \
+                elif event.key == pygame.K_RETURN and transicao is None and gerenciador_fases is not None and \
                         gerenciador_fases.estado in (gerenciador_fases.ESTADO_VITORIA,
                                                       gerenciador_fases.ESTADO_DERROTA):
                     game_state = "menu"
@@ -679,9 +724,17 @@ while running:
         desenha_conectar(tela_jogo, tick)
 
     elif game_state == "jogando":
-        teclas = pygame.key.get_pressed()
-        atualizar_combate(dt, teclas, eventos)
-        desenhar_combate(tela_jogo)
+        if transicao is not None:
+            atualizar_transicao(dt, eventos)
+        else:
+            teclas = pygame.key.get_pressed()
+            atualizar_combate(dt, teclas, eventos)
+
+        if transicao is not None:
+            transicao.desenhar(tela_jogo)
+        else:
+            desenhar_combate(tela_jogo)
+            iniciar_transicao_de_fase_se_necessario()
 
 
     tela_redimensionada = pygame.transform.scale(tela_jogo, (novo_w, novo_h))
