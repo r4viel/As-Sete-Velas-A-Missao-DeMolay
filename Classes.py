@@ -609,17 +609,17 @@ class Inimigo(Personagem):
 
 
 class Jacques(Jogador):
-    def __init__(self, nome="Jacques", vida=100, forca=12, poder=8, x=0, y=0):
+    def __init__(self, nome="Jacques", vida=300, forca=18, poder=14, x=0, y=0):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
 class Peralde(Aliado):
-    def __init__(self, nome="Peralde", vida=100, forca=10, poder=8, x=0, y=0):
+    def __init__(self, nome="Peralde", vida=120, forca=14, poder=10, x=0, y=0):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
 class Geofrey(Personagem):
-    def __init__(self, nome="Geofrey", vida=80, forca=9, poder=6, x=0, y=0):
+    def __init__(self, nome="Geofrey", vida=100, forca=12, poder=8, x=0, y=0):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
