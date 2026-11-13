@@ -105,7 +105,6 @@ class GerenciadorFases:
         self.inimigos = []
         self.fundo_atual = None
         self.estado = self.ESTADO_COMBATE
-        self.timer_transicao = 0.0
         self.mensagem = ""
 
         self._carregar_fase_atual()
@@ -152,15 +151,23 @@ class GerenciadorFases:
     def eh_ultima_fase(self):
         return self.indice_fase >= len(self.fases) - 1
 
+    def avancar_apos_transicao(self):
+        """Conclui a passagem de fase (ou a vitória final) depois da transição narrativa.
+
+        Antes isso acontecia sozinho quando um timer de 2s acabava; agora só acontece
+        quando a transição chama este método. Chamadas repetidas são inofensivas.
+        """
+        if self.estado != self.ESTADO_TRANSICAO:
+            return
+        if self.eh_ultima_fase():
+            self.estado = self.ESTADO_VITORIA
+        else:
+            self.indice_fase += 1
+            self._carregar_fase_atual()
+
     def atualizar(self, dt, sistema_virtude):
         if self.estado == self.ESTADO_TRANSICAO:
-            self.timer_transicao -= dt
-            if self.timer_transicao <= 0:
-                if self.eh_ultima_fase():
-                    self.estado = self.ESTADO_VITORIA
-                else:
-                    self.indice_fase += 1
-                    self._carregar_fase_atual()
+            # Aguardando a transição narrativa (ver avancar_apos_transicao).
             return
 
         if sistema_virtude.esgotada():
@@ -171,11 +178,6 @@ class GerenciadorFases:
         if self.todos_inimigos_derrotados():
             if sistema_virtude.pode_avancar(self.numero_fase):
                 self.estado = self.ESTADO_TRANSICAO
-                self.timer_transicao = 2.0
-                if self.eh_ultima_fase():
-                    self.mensagem = "Todas as velas acesas! Vitória!"
-                else:
-                    self.mensagem = "Fase concluída! Avançando..."
             else:
                 self.estado = self.ESTADO_VIRTUDE_INSUFICIENTE
                 exigido = sistema_virtude.exigencia_atual(self.numero_fase)
