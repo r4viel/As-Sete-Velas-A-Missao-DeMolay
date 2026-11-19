@@ -65,6 +65,62 @@ CONFIG_SPRITES = {
             "ataque4": ("ataque3", 1),
         },
     },
+    "templarioPretoBranco": {
+        "arquivos": {
+            "andar": "walk.png",
+            "correr": "run.png",
+            "pular": "jump.png",
+            "machucado": "hurt.png",
+            "morrer": "dead.png",
+            "defender": "protect.png",
+            "ataque1": "attack01.png",
+            "ataque2": "attack02.png",
+            "ataque3": "attack03.png",
+            "ataque4": "attack04.png",
+        },
+        "recortes": {
+            "andar": [(57, 179), (271, 387), (486, 600), (685, 800), (891, 1019),
+                (1111, 1235), (1333, 1448), (1511, 1638), (1728, 1858)],
+            "correr": [(32, 179), (244, 394), (455, 598), (662, 807), (863, 1023),
+                (1073, 1238), (1295, 1450), (1511, 1664), (1718, 1866)],
+            "pular": [(373, 508), (590, 715), (793, 916), (1003, 1128), (1212, 1342), (1421, 1548)],
+            "machucado": [(610, 785), (859, 1023), (1119, 1310)],
+            "morrer": [(328, 511), (588, 783), (828, 1047), (1077, 1339), (1358, 1616)],
+            "defender": [(210, 373), (455, 671), (718, 910), (988, 1202), (1255, 1474), (1529, 1738)],
+            "ataque1": [(75, 282), (314, 495), (534, 726), (818, 973),
+                (1044, 1253), (1271, 1511), (1537, 1768)],
+            "ataque2": [(192, 380), (449, 666), (728, 940), (977, 1224), (1277, 1516), (1561, 1736)],
+            "ataque3": [(185, 351), (442, 628), (708, 958), (959, 1258), (1259, 1554), (1560, 1763)],
+            "ataque4": [(165, 381), (463, 712), (733, 959), (989, 1194), (1195, 1510), (1534, 1733)],
+        },
+    },
+    "templario": {
+        "arquivos": {
+            "andar": "walk.png",
+            "correr": "run.png",
+            "pular": "jump.png",
+            "machucado": "hurt.png",
+            "morrer": "dead.png",
+            "defender": "protect.png",
+            "ataque1": "attack01.png",
+            "ataque2": "attack02.png",
+            "ataque3": "attack03.png",
+        },
+        "recortes": {
+            "andar": [(25, 169), (256, 412), (504, 628), (722, 872),
+                (968, 1124), (1208, 1363), (1450, 1586), (1674, 1830)],
+            "correr": [(29, 196), (267, 429), (501, 654), (721, 887),
+                (979, 1150), (1225, 1388), (1459, 1626), (1705, 1868)],
+            "pular": [(334, 467), (555, 697), (798, 928), (1010, 1140), (1232, 1364), (1470, 1598)],
+            "machucado": [(617, 798), (866, 1054), (1117, 1312)],
+            "morrer": [(486, 656), (730, 906), (969, 1189), (1222, 1459)],
+            "defender": [(445, 628), (692, 867), (958, 1139), (1241, 1413)],
+            "ataque1": [(161, 342), (409, 601), (634, 860), (941, 1161), (1194, 1452), (1453, 1720)],
+            "ataque2": [(237, 412), (486, 663), (740, 913), (1003, 1155), (1222, 1480), (1490, 1677)],
+            "ataque3": [(206, 375), (449, 647), (710, 993), (1002, 1191), (1279, 1457), (1506, 1683)],
+        },
+        "substitutos": {"ataque4": ("ataque3", 1)},
+    },
 }
 
 
@@ -613,13 +669,19 @@ class Jacques(Jogador):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
-class Peralde(Aliado):
-    def __init__(self, nome="Peralde", vida=120, forca=14, poder=10, x=0, y=0):
+class Peralde(Jogador):
+    """Personagem jogável da Fase 1 (templário preto e branco)."""
+    PASTA_SPRITES = "templarioPretoBranco"
+
+    def __init__(self, nome="Peralde", vida=300, forca=18, poder=14, x=0, y=0):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
-class Geofrey(Personagem):
-    def __init__(self, nome="Geofrey", vida=100, forca=12, poder=8, x=0, y=0):
+class Geofrey(Jogador):
+    """Personagem jogável da Fase 2 (o outro templário)."""
+    PASTA_SPRITES = "templario"
+
+    def __init__(self, nome="Geofrey", vida=300, forca=18, poder=14, x=0, y=0):
         super().__init__(nome, vida, forca, poder, x, y)
 
 
