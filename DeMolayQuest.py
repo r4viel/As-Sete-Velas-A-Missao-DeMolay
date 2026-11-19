@@ -1,4 +1,4 @@
-from Classes import Jacques
+from Classes import Jacques, Peralde, Geofrey
 from Sistemas import SistemaVirtude, GerenciadorFases
 from Transicoes import TransicaoNarrativa, TEXTOS_TRANSICAO
 import pygame
@@ -285,7 +285,7 @@ def desenha_creditos(surface, tick):
     return rect_voltar
 
 
-def desenha_hud(surface, jacques, virtude, gerenciador_fases, pontuacao):
+def desenha_hud(surface, jogador, virtude, gerenciador_fases, pontuacao):
 
     painel = pygame.Surface((WIDTH, 78), pygame.SRCALPHA)
     painel.fill((10, 5, 20, 170))
@@ -320,7 +320,7 @@ def desenha_hud(surface, jacques, virtude, gerenciador_fases, pontuacao):
     surface.blit(velas_txt, velas_txt.get_rect(right=WIDTH - 20, top=10))
 
 
-    vida_jacques = fonte_hud_sm.render(f"Jacques: {jacques.vida}/{jacques.vida_maxima}", True, (220, 220, 220))
+    vida_jacques = fonte_hud_sm.render(f"{jogador.nome}: {jogador.vida}/{jogador.vida_maxima}", True, (220, 220, 220))
     surface.blit(vida_jacques, vida_jacques.get_rect(right=WIDTH - 20, top=36))
 
 
@@ -351,19 +351,40 @@ def desenha_tela_final(surface, titulo, cor_titulo, mensagem):
 
 LIMITES_CENA = pygame.Rect(20, 95, WIDTH - 40, HEIGHT - 130)
 
-jacques = None
+jogador = None
 virtude = None
 gerenciador_fases = None
 pontuacao = 0
 transicao = None  # TransicaoNarrativa ativa (None = jogo liberado)
 
 
+# Personagem jogável de cada fase: Fase 1 = templário preto e branco (Peralde),
+# Fase 2 = o outro templário (Geofrey), Fase 3 = Jacques (contra o Rei).
+JOGADOR_POR_FASE = {1: Peralde, 2: Geofrey, 3: Jacques}
+
+
+def criar_jogador_da_fase(numero_fase):
+    """Cria um personagem NOVO para a fase, já com a vida 100% cheia."""
+    classe = JOGADOR_POR_FASE.get(numero_fase, Jacques)
+    novo_jogador = classe(x=LIMITES_CENA.left + 60, y=LIMITES_CENA.centery)
+    novo_jogador.direcao = "direita"
+    return novo_jogador
+
+
+def avancar_fase_e_trocar_jogador():
+    """Roda quando a tela está preta: carrega a próxima fase e troca o personagem."""
+    global jogador
+    fase_antes = gerenciador_fases.indice_fase
+    gerenciador_fases.avancar_apos_transicao()
+    if gerenciador_fases.indice_fase != fase_antes:
+        jogador = criar_jogador_da_fase(gerenciador_fases.numero_fase)
+
+
 def reiniciar_combate():
-    global jacques, virtude, gerenciador_fases, pontuacao, transicao
+    global jogador, virtude, gerenciador_fases, pontuacao, transicao
     transicao = None
 
-    jacques = Jacques(x=LIMITES_CENA.left + 60, y=LIMITES_CENA.centery)
-    jacques.direcao = "direita"
+    jogador = criar_jogador_da_fase(1)
 
     virtude = SistemaVirtude()
     gerenciador_fases = GerenciadorFases(WIDTH, HEIGHT)
@@ -463,7 +484,7 @@ def iniciar_transicao_de_fase_se_necessario():
         return
     if gerenciador_fases.estado == gerenciador_fases.ESTADO_TRANSICAO:
         iniciar_transicao(gerenciador_fases.numero_fase,
-                          ao_ficar_preto=gerenciador_fases.avancar_apos_transicao)
+                          ao_ficar_preto=avancar_fase_e_trocar_jogador)
 
 
 def atualizar_transicao(dt, eventos):
@@ -484,8 +505,8 @@ def atualizar_combate(dt, teclas, eventos):
         return
 
     if gerenciador_fases.estado in (gerenciador_fases.ESTADO_VITORIA, gerenciador_fases.ESTADO_DERROTA):
-        if jacques:
-            jacques.atualizar(dt)
+        if jogador:
+            jogador.atualizar(dt)
         for inimigo in gerenciador_fases.inimigos:
             inimigo.atualizar(dt)
         return
@@ -520,62 +541,62 @@ def atualizar_combate(dt, teclas, eventos):
         except Exception:
             pass
 
-    if jacques and jacques.esta_vivo():
+    if jogador and jogador.esta_vivo():
         if agachar_pressionado:
-            jacques.agachar(True)
+            jogador.agachar(True)
         else:
-            jacques.agachar(False)
-            jacques.mover_horizontal(dx, dt, LIMITES_CENA)
-            if dx == 0 and jacques.estado == "andando":
-                jacques.estado = "parado"
+            jogador.agachar(False)
+            jogador.mover_horizontal(dx, dt, LIMITES_CENA)
+            if dx == 0 and jogador.estado == "andando":
+                jogador.estado = "parado"
 
 
     for event in eventos:
-        if jacques is None or not jacques.esta_vivo():
+        if jogador is None or not jogador.esta_vivo():
             continue
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
-                jacques.atacar()
+                jogador.atacar()
             elif event.key in (pygame.K_UP, pygame.K_w):
-                jacques.pular()
+                jogador.pular()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            jacques.atacar()
+            jogador.atacar()
         elif event.type == pygame.JOYBUTTONDOWN and controle1 and event.instance_id == controle1.get_instance_id():
             if event.button == 0:
-                jacques.atacar()
+                jogador.atacar()
             elif event.button == 1:
-                jacques.pular()
+                jogador.pular()
 
     if servidor_mobile is not None:
         for acao in servidor_mobile.consumir_eventos():
-            if jacques is None or not jacques.esta_vivo():
+            if jogador is None or not jogador.esta_vivo():
                 continue
             if acao == "atacar":
-                jacques.atacar()
+                jogador.atacar()
             elif acao == "pular":
-                jacques.pular()
+                jogador.pular()
 
-    if jacques:
-        jacques.atualizar(dt)
+    if jogador:
+        jogador.atualizar(dt)
     for inimigo in gerenciador_fases.inimigos:
         inimigo.atualizar(dt)
 
 
-    alvos_do_inimigo = [jacques] if jacques is not None else []
+    alvos_do_inimigo = [jogador] if jogador is not None else []
     for inimigo in gerenciador_fases.inimigos_vivos():
         inimigo.atualizar_ia(dt, alvos_do_inimigo, LIMITES_CENA)
 
 
-    if jacques is not None:
-        _aplicar_ataques_jogador(jacques, gerenciador_fases.inimigos_vivos())
+    if jogador is not None:
+        _aplicar_ataques_jogador(jogador, gerenciador_fases.inimigos_vivos())
 
-    if jacques is not None:
-        _aplicar_ataques_inimigo(gerenciador_fases.inimigos_vivos(), [jacques])
+    if jogador is not None:
+        _aplicar_ataques_inimigo(gerenciador_fases.inimigos_vivos(), [jogador])
 
 
-    if jacques and not jacques.esta_vivo():
+    if jogador and not jogador.esta_vivo():
         gerenciador_fases.estado = gerenciador_fases.ESTADO_DERROTA
-        gerenciador_fases.mensagem = "Jacques caiu em combate..."
+        gerenciador_fases.mensagem = f"{jogador.nome} caiu em combate..."
         return
 
 
@@ -585,14 +606,14 @@ def atualizar_combate(dt, teclas, eventos):
 def desenhar_combate(surface):
     gerenciador_fases.desenhar_fundo(surface)
 
-    personagens = list(gerenciador_fases.inimigos) + ([jacques] if jacques else [])
+    personagens = list(gerenciador_fases.inimigos) + ([jogador] if jogador else [])
 
     personagens.sort(key=lambda p: p.y + p.altura)
     for personagem in personagens:
         if personagem.esta_vivo() or personagem.estado == "morrendo":
             personagem.desenhar(surface)
 
-    desenha_hud(surface, jacques, virtude, gerenciador_fases, pontuacao)
+    desenha_hud(surface, jogador, virtude, gerenciador_fases, pontuacao)
 
     if gerenciador_fases.estado == gerenciador_fases.ESTADO_VITORIA:
         desenha_tela_final(surface, "Vitória!", COR_VELA,
