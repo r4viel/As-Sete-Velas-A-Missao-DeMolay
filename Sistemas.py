@@ -97,8 +97,8 @@ class GerenciadorFases:
 
         self.fases = [
             Fase(1, "O Templo", "templo.png", self._inimigos_fase_1),
-            Fase(2, "A Masmorra", "masmorra.png", self._inimigos_fase_2),
-            Fase(3, "A Fogueira", "fogueira.png", self._inimigos_fase_3),
+            Fase(2, "A Masmorra", "masmorra.jpeg", self._inimigos_fase_2),
+            Fase(3, "A Fogueira", "fogueira.jpeg", self._inimigos_fase_3),
         ]
 
         self.indice_fase = 0
